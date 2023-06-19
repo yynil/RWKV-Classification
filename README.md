@@ -7,6 +7,8 @@ This is a project to train classification model using RWKV model from Huggingfac
 - pandas : 2.0.2
 - peft : 0.3.0
 
+# Environment Variables
+- add the src folder to PYTHONPATH
 
 ## Data preparation
 
