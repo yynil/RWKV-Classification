@@ -8,7 +8,8 @@ from transformers import AutoTokenizer, DefaultDataCollator
 import datasets
 from torch.utils.data import DataLoader
 import torch
-# torch.set_float32_matmul_precision('high')
+torch.set_float32_matmul_precision('high')
+from lightning.pytorch.callbacks import EarlyStopping,StochasticWeightAveraging
 
 class PeftModelForSequenceClassificationLightning(pl.LightningModule):
     def __init__(self,peft_model,is_variable_len = False):
@@ -47,12 +48,14 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--train_file', type=str, default='data/ChnSentiCorp_htl_all_train.csv')
     parser.add_argument('--test_file', type=str, default='data/ChnSentiCorp_htl_all_test.csv')
-    parser.add_argument('--model_path', type=str, default='/Volumes/TOUROS/models/rwkv/raven-0.4b-world')
+    parser.add_argument('--model_path', type=str, default='/media/yueyulin/KINGSTON/pretrained_models/rwkv/raven-0.4b-world')
     parser.add_argument('--tokenizer_file', type=str, default='data/rwkv_vocab_v20230424.txt')
     parser.add_argument('--device', type=str, default='gpu')
     parser.add_argument('--batch_size', type=int, default=1)
     parser.add_argument('--num_devices', type=int, default=1)
     parser.add_argument('--max_length', type=int, default=2048)
+    parser.add_argument('--max_epoches', type=int, default=30)
+    parser.add_argument('--accumulate_grad_batches', type=int, default=4)
 
     args = parser.parse_args()
     train_file = args.train_file
@@ -62,6 +65,8 @@ def main():
     batch_size = args.batch_size
     num_devices = args.num_devices
     max_length = args.max_length
+    max_epoches = args.max_epoches
+    accumulate_grad_batches = args.accumulate_grad_batches
 
     is_world = 'world' in model_path
     print(args)
@@ -110,9 +115,9 @@ def main():
     print(train_dataloader)
     test_dataloader = DataLoader(test_ds, batch_size=batch_size, num_workers=1,collate_fn=DefaultDataCollator(return_tensors='pt'))
     print(test_dataloader)
-    # ckpt = 'lightning_logs/version_0/checkpoints/epoch=29-step=510.ckpt'
-    trainer = pl.Trainer( max_epochs=1,accelerator=device,devices=num_devices)
-    trainer.fit(model=model, train_dataloaders=train_dataloader)
+    callbacks = [EarlyStopping(monitor='val_loss', patience=3),StochasticWeightAveraging(swa_lrs=1e-2)]
+    trainer = pl.Trainer( max_epochs=max_epoches,accelerator=device,devices=num_devices,accumulate_grad_batches=accumulate_grad_batches)
+    trainer.fit(model=model, train_dataloaders=train_dataloader,val_dataloaders=test_dataloader)
     peft_model = model.peft_model
     # print(peft_model.peft_config)
     peft_model.save_pretrained('peft_model_0.4b_world_lora/')
