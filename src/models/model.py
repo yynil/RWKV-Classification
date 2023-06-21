@@ -33,13 +33,12 @@ def recurrent_model_forward(model :RwkvModel, input_ids :torch.Tensor,context_le
 
 class RwkvModelForSequenceClassification(RwkvPreTrainedModel):
     
-    def __init__(self, config,num_labels=2,pad_token_id=0):
+    def __init__(self, config,pad_token_id=0):
         print(config)
-        print(num_labels)
         print(pad_token_id)
         super().__init__(config)
         print(config)
-        self.num_labels = num_labels
+        self.num_labels = len(config.label2id.keys())
         self.pad_token_id = pad_token_id
         self.rwkv = RwkvModel(config)
         self.score = nn.Linear(config.hidden_size, self.num_labels, bias=False)
@@ -102,6 +101,8 @@ class RwkvModelForSequenceClassification(RwkvPreTrainedModel):
                     loss = loss_fct(pooled_logits, labels)
             elif self.config.problem_type == "single_label_classification":
                 loss_fct = CrossEntropyLoss()
+                # print(pooled_logits)
+                # print(labels)
                 loss = loss_fct(pooled_logits.view(-1, self.num_labels), labels.view(-1))
             elif self.config.problem_type == "multi_label_classification":
                 loss_fct = BCEWithLogitsLoss()
