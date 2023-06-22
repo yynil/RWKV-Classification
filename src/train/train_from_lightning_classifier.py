@@ -27,7 +27,7 @@ class PeftModelForSequenceClassificationLightning(pl.LightningModule):
         output = self.peft_model.forward(input_ids,labels=labels,return_dict=False)
         loss = output[0]
         # Logging to TensorBoard (if installed) by default
-        self.log("train_loss", loss)
+        self.log("train_loss", loss,sync_dist=True)
         return loss
     
     def validation_step(self, batch, batch_idx):
@@ -36,7 +36,7 @@ class PeftModelForSequenceClassificationLightning(pl.LightningModule):
         output = self.peft_model.forward(input_ids,labels=labels,return_dict=False)
         loss = output[0]
         # Logging to TensorBoard by default
-        self.log("val_loss", loss)
+        self.log("val_loss", loss,sync_dist=True)
         return loss
 
     def configure_optimizers(self):
@@ -131,18 +131,14 @@ def main():
     ds = ds.map(tokenization_rwkv if is_world else tokenization,remove_columns=['news','length','label'],batched=True)
     train_ds = ds['train']
     test_ds = ds['test']
-    train_dataloader = DataLoader(train_ds, batch_size=batch_size, num_workers=1,collate_fn=DefaultDataCollator(return_tensors='pt'),shuffle=True)
+    train_dataloader = DataLoader(train_ds, batch_size=batch_size, num_workers=10,pin_memory=True,collate_fn=DefaultDataCollator(return_tensors='pt'),shuffle=True)
     print(train_dataloader)
-    test_dataloader = DataLoader(test_ds, batch_size=batch_size, num_workers=1,collate_fn=DefaultDataCollator(return_tensors='pt'))
+    test_dataloader = DataLoader(test_ds, batch_size=batch_size, num_workers=10,pin_memory=True,collate_fn=DefaultDataCollator(return_tensors='pt'))
     print(test_dataloader)
     if not is_q_lora:
         callbacks = [EarlyStopping(monitor='val_loss', patience=3)]
         trainer = pl.Trainer( max_epochs=max_epoches,accelerator=device,
-                            strategy=DeepSpeedStrategy(
-            stage=3,
-            offload_optimizer=True,
-            offload_parameters=True,
-        ),
+                            strategy=strategy,
                             devices=num_devices,accumulate_grad_batches=accumulate_grad_batches,
                             check_val_every_n_epoch=10,precision="bf16",              
                             callbacks=callbacks)    
